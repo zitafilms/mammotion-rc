@@ -1024,21 +1024,26 @@ async def _cloud_mowers() -> list[dict]:
         if resp and resp.data and resp.data.data:
             for d in resp.data.data:
                 entries.append((d.device_name, d.iot_id, d.product_key or "", d.nick_name or None))
-
-        # Shared-mower source: listBindingByAccount only returns devices owned
-        # by the account.  An account that merely *received* a share (the
-        # recommended secondary-account setup) has its mower only on
-        # getShareNoticeList (status=0 = accepted).  Merge those in so the
-        # onboarding matcher can pair bonded_name == device_name.  ShareNotice
-        # carries device_name/product_name but no iot_id.
-        shared = await cloud.get_shared_notice_list()
-        if shared and shared.data and shared.data.data:
-            for n in shared.data.data:
-                if n.status == 0 and n.device_name:
-                    entries.append((n.device_name, None, "", None))
     except Exception as exc:  # noqa: BLE001
         gateway_error = str(exc)
         _LOGGER.warning("Aliyun device enumeration failed: %s", exc)
+
+    # Shared-mower source: listBindingByAccount only returns devices owned by the
+    # account.  An account that merely *received* a share (the recommended
+    # secondary-account setup) has its mower only on getShareNoticeList
+    # (status=0 = accepted).  Merge those in so the onboarding matcher can pair
+    # bonded_name == device_name.  ShareNotice carries device_name/product_name
+    # but no iot_id.  Own try/except (and only when the handshake above
+    # succeeded) so a share-notice hiccup can't masquerade as a gateway failure.
+    if gateway_error is None:
+        try:
+            shared = await cloud.get_shared_notice_list()
+            if shared and shared.data and shared.data.data:
+                for n in shared.data.data:
+                    if n.status == 0 and n.device_name:
+                        entries.append((n.device_name, None, "", None))
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.warning("share-notice enumeration failed: %s", exc)
 
     # Fallbacks: the device-page endpoint (v1/user/device/page) returns BOTH
     # owned (owned=1) and shared-received (owned=0) devices WITH iot_id —
