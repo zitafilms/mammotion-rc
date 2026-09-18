@@ -64,7 +64,10 @@ main {
 
 #video-section { display: flex; flex-direction: column; gap: 0.5rem; position: relative; }
 
-#video {
+/* Stage holding both camera feeds.  It owns the 16:9 box that #video used to
+   own, so the layout is unchanged when only the Luba feed is present. */
+#video-stage {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
@@ -72,9 +75,91 @@ main {
   overflow: hidden;
 }
 
+/* A feed is positioned entirely by .is-main / .is-pip.  Swapping the two is a
+   class toggle, which is why it's instant: no element is moved in the DOM, no
+   stream is restarted, the <img> keeps its open MJPEG connection. */
+.feed {
+  position: absolute;
+  background: #000;
+  overflow: hidden;
+  transition: width 0.18s ease, height 0.18s ease, inset 0.18s ease;
+}
+
+.feed.is-main {
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 1;
+}
+
+.feed.is-pip {
+  top: auto;
+  left: auto;
+  right: 10px;
+  bottom: 10px;
+  width: 30%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  z-index: 2;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.feed.is-pip:hover { border-color: #9cf; }
+.feed[hidden] { display: none; }
+
+/* Do not force #video itself to 100% width/height: doing so overrides the
+   .is-pip geometry because an ID selector is more specific than a class.
+   The .is-main/.is-pip classes define the container size instead. */
+#video { min-width: 0; min-height: 0; }
+
+/* HC33 is physically mounted 90° clockwise. Rotate only the image back.
+   Scale differs between the 16:9 main view and the 4:3 PiP so each fills
+   its container without black bars. */
+#hc33-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform-origin: center center;
+}
+
+#video-hc33.is-main #hc33-img {
+  transform: translate(-50%, -50%) rotate(-90deg) scale(1.78);
+}
+
+#video-hc33.is-pip #hc33-img {
+  transform: translate(-50%, -50%) rotate(-90deg) scale(1.34);
+}
+
+/* Corner tag so it's never ambiguous which feed you're looking at — it stops
+   mattering once you know the view, but matters a lot the first time the
+   HC33's forward view and the Luba's gimbal view look similar. */
+.feed-label {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 15px;
+  color: #cde;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.feed.is-main .feed-label { font-size: 12px; line-height: 18px; }
+
 /* Heading-up compass overlaid on the top-right of the video feed. */
 .compass {
   position: absolute;
+  /* Above both feeds (.is-main z-index 1, .is-pip 2) so it stays readable
+     whichever one is on top.  Top-right corner, while the PiP sits
+     bottom-right, so the two never overlap. */
+  z-index: 3;
   top: 10px;
   right: 10px;
   width: 84px;
